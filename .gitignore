@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+.venv/
+venv/
+*.egg
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project-specific
+hf_space/
+data/cache/*.parquet
+data/cache/*.csv
+!data/cache/.keep_whitelist
+models/checkpoints/
+!models/checkpoints/.gitkeep
+!models/feature_names.json
+!models/metadata/
+*.log
