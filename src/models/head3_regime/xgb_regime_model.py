@@ -1,4 +1,5 @@
 """XGBoost model for regime classification."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -13,7 +14,7 @@ class XGBRegimeModel(ForecastModel):
     name = "xgboost"
     head = "regime"
 
-    def fit(self, X: pd.DataFrame, y: pd.Series) -> "XGBRegimeModel":
+    def fit(self, X: pd.DataFrame, y: pd.Series) -> XGBRegimeModel:
         raise NotImplementedError("Implemented in Phase 5")
 
     def predict(self, X: pd.DataFrame) -> np.ndarray:
@@ -23,7 +24,7 @@ class XGBRegimeModel(ForecastModel):
         raise NotImplementedError("Implemented in Phase 5")
 
     @classmethod
-    def load(cls, path: Path) -> "XGBRegimeModel":
+    def load(cls, path: Path) -> XGBRegimeModel:
         raise NotImplementedError("Implemented in Phase 5")
 
     def predict_proba(self, X: pd.DataFrame) -> np.ndarray:

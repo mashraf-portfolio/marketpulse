@@ -1,4 +1,5 @@
 """ModelRegistry: loads checkpoints into memory, dispatches to the right model."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -14,7 +15,7 @@ class ModelRegistry:
     @classmethod
     def load_from(
         cls, models_dir: Path, ticker_whitelist: list[str], skip_pytorch: bool = False
-    ) -> "ModelRegistry":
+    ) -> ModelRegistry:
         raise NotImplementedError("Implemented in Phase 5")
 
     def predict_price(self, request) -> dict:

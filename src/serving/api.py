@@ -1,4 +1,5 @@
 """FastAPI application with @asynccontextmanager lifespan."""
+
 from __future__ import annotations
 
 import time
@@ -10,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 # Detect PyTorch availability at module import
 try:
     import torch  # noqa: F401
+
     PYTORCH_AVAILABLE = True
 except ImportError:
     PYTORCH_AVAILABLE = False
@@ -36,10 +38,11 @@ app.add_middleware(
 
 @app.get("/health")
 async def health():
+    start_time = getattr(app.state, "start_time", time.time())
     return {
         "status": "degraded",
         "models_loaded": [],
-        "uptime_seconds": time.time() - app.state.start_time,
+        "uptime_seconds": time.time() - start_time,
         "build_id": "dev",
     }
 

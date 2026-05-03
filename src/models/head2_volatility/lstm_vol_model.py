@@ -1,4 +1,5 @@
 """LSTM model for volatility forecasting."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -13,7 +14,7 @@ class LSTMVolModel(ForecastModel):
     name = "lstm_vol"
     head = "volatility"
 
-    def fit(self, X: pd.DataFrame, y: pd.Series) -> "LSTMVolModel":
+    def fit(self, X: pd.DataFrame, y: pd.Series) -> LSTMVolModel:
         raise NotImplementedError("Implemented in Phase 4")
 
     def predict(self, X: pd.DataFrame) -> np.ndarray:
@@ -23,7 +24,7 @@ class LSTMVolModel(ForecastModel):
         raise NotImplementedError("Implemented in Phase 4")
 
     @classmethod
-    def load(cls, path: Path) -> "LSTMVolModel":
+    def load(cls, path: Path) -> LSTMVolModel:
         raise NotImplementedError("Implemented in Phase 4")
 
     def predict_high_vol(self, X: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:

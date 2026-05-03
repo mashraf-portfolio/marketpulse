@@ -1,4 +1,5 @@
 """Temporal Fusion Transformer model for price/direction forecasting."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -14,7 +15,7 @@ class TFTModel(ForecastModel):
     head = "price"
     requires_pytorch = True
 
-    def fit(self, X: pd.DataFrame, y: pd.Series) -> "TFTModel":
+    def fit(self, X: pd.DataFrame, y: pd.Series) -> TFTModel:
         raise NotImplementedError("Implemented in Phase 3")
 
     def predict(self, X: pd.DataFrame) -> np.ndarray:
@@ -24,7 +25,7 @@ class TFTModel(ForecastModel):
         raise NotImplementedError("Implemented in Phase 3")
 
     @classmethod
-    def load(cls, path: Path) -> "TFTModel":
+    def load(cls, path: Path) -> TFTModel:
         raise NotImplementedError("Implemented in Phase 3")
 
     def attention_weights(self, X: pd.DataFrame) -> dict:

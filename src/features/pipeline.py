@@ -1,10 +1,11 @@
 """The single feature pipeline. Called identically in training + inference."""
+
 from __future__ import annotations
 
 import pandas as pd
 
 
-class FeatureSchemaMismatch(Exception):
+class FeatureSchemaMismatchError(Exception):
     """Raised when in-memory feature columns disagree with feature_names.json on disk."""
 
 

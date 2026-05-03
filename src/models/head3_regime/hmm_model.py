@@ -1,4 +1,5 @@
 """HMM model for regime classification."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -13,7 +14,7 @@ class HMMModel(ForecastModel):
     name = "hmm"
     head = "regime"
 
-    def fit(self, X: pd.DataFrame, y: pd.Series) -> "HMMModel":
+    def fit(self, X: pd.DataFrame, y: pd.Series) -> HMMModel:
         raise NotImplementedError("Implemented in Phase 5")
 
     def predict(self, X: pd.DataFrame) -> np.ndarray:
@@ -23,7 +24,7 @@ class HMMModel(ForecastModel):
         raise NotImplementedError("Implemented in Phase 5")
 
     @classmethod
-    def load(cls, path: Path) -> "HMMModel":
+    def load(cls, path: Path) -> HMMModel:
         raise NotImplementedError("Implemented in Phase 5")
 
     def predict_proba(self, X: pd.DataFrame) -> np.ndarray:

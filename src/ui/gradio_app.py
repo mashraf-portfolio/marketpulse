@@ -1,4 +1,5 @@
 """Three-tab Gradio app: Price/Direction, Volatility, Regime, About."""
+
 from __future__ import annotations
 
 

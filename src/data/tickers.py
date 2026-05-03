@@ -1,4 +1,5 @@
 """Loader for the 23-ticker whitelist from config/tickers.yaml."""
+
 from __future__ import annotations
 
 

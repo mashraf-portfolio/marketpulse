@@ -1,4 +1,5 @@
 """LSTM model for price/direction forecasting."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -13,7 +14,7 @@ class LSTMModel(ForecastModel):
     name = "lstm"
     head = "price"
 
-    def fit(self, X: pd.DataFrame, y: pd.Series) -> "LSTMModel":
+    def fit(self, X: pd.DataFrame, y: pd.Series) -> LSTMModel:
         raise NotImplementedError("Implemented in Phase 2")
 
     def predict(self, X: pd.DataFrame) -> np.ndarray:
@@ -23,5 +24,5 @@ class LSTMModel(ForecastModel):
         raise NotImplementedError("Implemented in Phase 2")
 
     @classmethod
-    def load(cls, path: Path) -> "LSTMModel":
+    def load(cls, path: Path) -> LSTMModel:
         raise NotImplementedError("Implemented in Phase 2")

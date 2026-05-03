@@ -1,4 +1,5 @@
 """Pydantic v2 request/response models for FastAPI."""
+
 from __future__ import annotations
 
 from typing import Literal
@@ -10,7 +11,9 @@ class ForecastPriceRequest(BaseModel):
     ticker: str = Field(..., description="Ticker symbol from the whitelist", examples=["AAPL"])
     horizon: Literal[1, 7] = Field(1, description="Forecast horizon in trading days")
     model_type: Literal["arima", "prophet", "lstm", "tft"] = "arima"
-    include_attention: bool = Field(False, description="If True and model_type=tft, include attention weights")
+    include_attention: bool = Field(
+        False, description="If True and model_type=tft, include attention weights"
+    )
 
 
 class ForecastPriceResponse(BaseModel):

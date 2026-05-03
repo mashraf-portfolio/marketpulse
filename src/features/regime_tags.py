@@ -1,4 +1,5 @@
 """Regime tagging: trend buckets and volatility quartiles."""
+
 from __future__ import annotations
 
 import pandas as pd

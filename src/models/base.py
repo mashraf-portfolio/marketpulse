@@ -1,4 +1,5 @@
 """Common interface for all head models. Walk-forward harness only sees this API."""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -17,22 +18,18 @@ class ForecastModel(ABC):
     requires_pytorch: bool = False  # True for TFT only
 
     @abstractmethod
-    def fit(self, X: pd.DataFrame, y: pd.Series) -> "ForecastModel":
-        ...
+    def fit(self, X: pd.DataFrame, y: pd.Series) -> ForecastModel: ...
 
     @abstractmethod
-    def predict(self, X: pd.DataFrame) -> np.ndarray:
-        ...
+    def predict(self, X: pd.DataFrame) -> np.ndarray: ...
 
     def predict_with_ci(self, X: pd.DataFrame, alpha: float = 0.1) -> dict:
         """Default returns point predictions only; subclasses may override with CIs."""
         return {"point": self.predict(X), "lower": None, "upper": None}
 
     @abstractmethod
-    def save(self, path: Path) -> None:
-        ...
+    def save(self, path: Path) -> None: ...
 
     @classmethod
     @abstractmethod
-    def load(cls, path: Path) -> "ForecastModel":
-        ...
+    def load(cls, path: Path) -> ForecastModel: ...

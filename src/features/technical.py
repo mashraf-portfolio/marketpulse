@@ -1,4 +1,5 @@
 """Technical indicators via the ta library."""
+
 from __future__ import annotations
 
 import pandas as pd

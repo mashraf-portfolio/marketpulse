@@ -1,4 +1,5 @@
 """joblib.Memory wrapper around a fetcher."""
+
 from __future__ import annotations
 
 from src.data.fetchers import BaseFetcher

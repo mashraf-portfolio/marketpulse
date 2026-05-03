@@ -1,8 +1,9 @@
 """Configuration loading utilities. Reads YAML configs from config/."""
+
 from __future__ import annotations
 
 import os
-from functools import lru_cache
+from functools import cache
 from pathlib import Path
 from typing import Any
 
@@ -14,7 +15,7 @@ MODELS_DIR = Path(os.getenv("MODELS_DIR", REPO_ROOT / "models"))
 CACHE_DIR = Path(os.getenv("CACHE_DIR", REPO_ROOT / "data" / "cache"))
 
 
-@lru_cache(maxsize=None)
+@cache
 def load_yaml(name: str) -> dict[str, Any]:
     """Load a YAML config file from config/ by name (without extension)."""
     path = CONFIG_DIR / f"{name}.yaml"
