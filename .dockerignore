@@ -1,0 +1,48 @@
+# Version control
+.git/
+.gitignore
+.gitattributes
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+*.egg-info/
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Project artifacts not needed in image
+notebooks/
+docs/
+tests/
+hf_space/
+data/cache/*.parquet
+data/cache/*.csv
+*.log
+
+# README files: keep root README only
+*.md
+!README.md
+
+# CI / build configs not needed at runtime
+.github/
+.pre-commit-config.yaml
