@@ -9,7 +9,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
-COPY pyproject.toml ./
+COPY pyproject.toml README.md ./
+COPY src/ src/
 RUN pip install --user --no-cache-dir .
 
 # Stage 2: runtime
