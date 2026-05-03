@@ -1,0 +1,92 @@
+arima:
+  max_p: 5
+  max_q: 5
+  max_d: 2
+  seasonal: false
+  information_criterion: aic
+  suppress_warnings: true
+
+prophet:
+  daily_seasonality: false
+  weekly_seasonality: true
+  yearly_seasonality: true
+  seasonality_mode: multiplicative
+  changepoint_prior_scale: 0.05
+  interval_width: 0.95
+
+lstm:
+  seq_len: 60
+  hidden_units_layer1: 64
+  hidden_units_layer2: 32
+  dense_units: 16
+  dropout: 0.2
+  epochs: 50
+  batch_size: 32
+  validation_split: 0.1
+  early_stopping_patience: 5
+  optimizer: adam
+  learning_rate: 0.001
+  loss: huber
+  mc_dropout_samples: 50      # number of stochastic forward passes for CI band
+  ci_alpha: 0.10              # 90% CI: percentiles [5, 95]
+
+tft:
+  encoder_length: 60
+  prediction_length: 1        # 1d horizon (set to 7 for 7d models)
+  hidden_size: 32
+  attention_head_size: 4
+  dropout: 0.1
+  hidden_continuous_size: 16
+  max_epochs: 20
+  early_stopping_patience: 4
+  batch_size: 64
+  learning_rate: 0.001
+  quantiles: [0.05, 0.5, 0.95]
+
+# TFT covariate categorization. Critical: getting these wrong wastes the architecture.
+tft_covariates:
+  static_categoricals:
+    - ticker_group
+  static_reals: []
+  time_varying_known_reals:
+    - dow
+    - dom
+    - month
+    - quarter
+    - days_to_month_end
+  time_varying_known_categoricals:
+    - is_month_end
+    - is_quarter_end
+  time_varying_unknown_reals:
+    - Open
+    - High
+    - Low
+    - Close
+    - Volume
+    - rsi_14
+    - macd
+    - macd_signal
+    - macd_diff
+    - bb_high
+    - bb_low
+    - bb_mid
+    - atr_14
+    - obv
+    - stoch_k
+    - stoch_d
+    - mfi_14
+    - ret_lag_1
+    - ret_lag_2
+    - ret_lag_3
+    - ret_lag_4
+    - ret_lag_5
+    - log_ret_lag_1
+    - log_ret_lag_2
+    - log_ret_lag_3
+    - vol_lag_1
+    - vol_lag_2
+    - vol_lag_3
+    - trend_5d
+    - trend_20d
+    - trend_60d
+    - vol_bucket

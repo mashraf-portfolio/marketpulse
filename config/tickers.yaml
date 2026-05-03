@@ -1,0 +1,36 @@
+united_states:
+  - { ticker: AAPL,           display: "Apple Inc.",                    sector: tech }
+  - { ticker: MSFT,           display: "Microsoft Corp.",               sector: tech }
+  - { ticker: JPM,            display: "JPMorgan Chase",                sector: financials }
+  - { ticker: NVDA,           display: "NVIDIA Corp.",                  sector: tech }
+
+saudi_arabia:
+  - { ticker: 2222.SR,        display: "Saudi Aramco",                  sector: energy }
+  - { ticker: 1180.SR,        display: "Al Rajhi Bank",                 sector: financials }
+
+kuwait:
+  - { ticker: NBK.KW,         display: "National Bank of Kuwait",       sector: financials }
+  - { ticker: KFH.KW,         display: "Kuwait Finance House",          sector: financials }
+  - { ticker: ZAIN.KW,        display: "Zain (Mobile Telecom)",         sector: telecom }
+  - { ticker: BOUBYAN.KW,     display: "Boubyan Bank",                  sector: financials }
+  - { ticker: BOURSA.KW,      display: "Boursa Kuwait Securities",      sector: financials }
+
+qatar:
+  - { ticker: QNBK.QA,        display: "Qatar National Bank",           sector: financials }
+  - { ticker: IQCD.QA,        display: "Industries Qatar",              sector: industrials }
+  - { ticker: ORDS.QA,        display: "Ooredoo",                       sector: telecom }
+
+egypt:
+  - { ticker: COMI.CA,        display: "Commercial International Bank", sector: financials }
+  - { ticker: HRHO.CA,        display: "EFG Hermes Holding",            sector: financials }
+  - { ticker: ETEL.CA,        display: "Telecom Egypt",                 sector: telecom }
+
+uae:
+  - { ticker: EMAAR.AE,       display: "Emaar Properties",              sector: real_estate }
+  - { ticker: DIB.AE,         display: "Dubai Islamic Bank",            sector: financials }
+  - { ticker: EMIRATESNBD.AE, display: "Emirates NBD",                  sector: financials }
+
+netherlands:
+  - { ticker: ASML.AS,        display: "ASML Holding",                  sector: tech }
+  - { ticker: INGA.AS,        display: "ING Group",                     sector: financials }
+  - { ticker: HEIA.AS,        display: "Heineken N.V.",                 sector: consumer_staples }

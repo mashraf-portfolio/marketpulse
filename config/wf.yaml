@@ -1,0 +1,21 @@
+walk_forward:
+  initial_window_days: 504    # ~2 trading years
+  test_window_days: 21        # ~1 month forward
+  step_days: 21               # expand window by 1 month per fold
+  max_folds: 30               # cap CV runtime
+  warmup_days: 60             # discard first 60d for indicator NaN warmup
+
+deep_model_subset:
+  description: "Tickers used for walk-forward CV of LSTM/TFT (compute-bound subset). Production checkpoints are fit on full whitelist without CV."
+  tickers:
+    - AAPL
+    - JPM
+    - NBK.KW
+    - ASML.AS
+    - 2222.SR
+
+quality_gate:
+  description: "Per-head minimum walk-forward metrics. CI fails if any drop below."
+  head1_aapl_dir_acc_min: 0.52
+  head2_aapl_binary_acc_min: 0.65
+  head3_aapl_f1_macro_min: 0.60

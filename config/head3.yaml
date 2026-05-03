@@ -1,0 +1,39 @@
+hmm:
+  n_components: 3
+  covariance_type: full
+  n_iter: 200
+  random_state: 42
+  features:
+    - log_return
+    - realized_vol_20d
+
+regime_labels:
+  description: "Rule-based 3-class labels used as XGBoost target and as HMM evaluation reference."
+  classes: [bull, bear, sideways]
+  rule:
+    bull: "trend_60d > 0 AND vol_bucket in ['low', 'mid']"
+    bear: "trend_60d < 0 AND vol_bucket in ['low', 'mid']"
+    sideways: "everything else (including high-vol periods)"
+
+xgboost:
+  fixed:
+    objective: multi:softprob
+    num_class: 3
+    eval_metric: mlogloss
+    tree_method: hist
+    random_state: 42
+  search_space:
+    max_depth: [3, 8]
+    learning_rate: [0.01, 0.3]
+    n_estimators: [100, 500]
+    subsample: [0.6, 1.0]
+    colsample_bytree: [0.6, 1.0]
+    reg_alpha: [0.0, 1.0]
+    reg_lambda: [0.5, 5.0]
+  optuna:
+    n_trials: 50
+    cv_folds: 5
+    cv_method: TimeSeriesSplit
+    objective: f1_macro
+    direction: maximize
+  sample_weighting: balanced  # compute_sample_weight('balanced', y)

@@ -1,0 +1,29 @@
+garch:
+  p: 1
+  q: 1
+  mean: Constant
+  vol: Garch
+  dist: Normal
+  rescale: 100               # multiply log returns by 100 for arch numerics
+
+lstm_vol:
+  seq_len: 60
+  hidden_units_layer1: 64
+  hidden_units_layer2: 32
+  dense_units: 16
+  dropout: 0.2
+  epochs: 50
+  batch_size: 32
+  validation_split: 0.1
+  early_stopping_patience: 5
+  optimizer: adam
+  learning_rate: 0.001
+  loss: huber
+  mc_dropout_samples: 50
+  ci_alpha: 0.10
+  log_target: true            # apply np.log() to vol target before training
+
+high_vol_classifier:
+  description: "Binary high-vol classifier derived from Head 2's volatility forecast."
+  threshold_window_days: 20  # rolling median over past 20 days
+  decision_method: sigmoid_calibrated  # smooth probability via sigmoid
