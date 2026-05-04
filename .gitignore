@@ -37,3 +37,6 @@ models/checkpoints/
 !models/feature_names.json
 !models/metadata/
 *.log
+
+# Claude Code local workspace
+.claude/
