@@ -6,11 +6,21 @@ Pipeline-level integration tests are added in a later step.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import pytest
 
+from src.features import pipeline as pipeline_mod
+from src.features.calendar import CALENDAR_COLUMNS, add_calendar_features
 from src.features.lagged import LAGGED_COLUMNS, add_lagged_features
+from src.features.pipeline import (
+    FeatureSchemaMismatchError,
+    engineer_features,
+    feature_columns,
+)
+from src.features.regime_tags import REGIME_COLUMNS, add_regime_tags
 from src.features.technical import TECHNICAL_COLUMNS, add_technical_indicators
 
 
@@ -97,3 +107,124 @@ class TestLaggedFeatures:
         out = add_lagged_features(ohlcv_frame)
         for c in ["vol_lag_1", "vol_lag_2", "vol_lag_3"]:
             assert np.isfinite(out[c].iloc[-1]), f"{c} non-finite at tail"
+
+
+class TestCalendarFeatures:
+    def test_adds_all_expected_columns(self, ohlcv_frame: pd.DataFrame) -> None:
+        out = add_calendar_features(ohlcv_frame)
+        for col in CALENDAR_COLUMNS:
+            assert col in out.columns
+
+    def test_no_nans_anywhere(self, ohlcv_frame: pd.DataFrame) -> None:
+        out = add_calendar_features(ohlcv_frame)
+        for col in CALENDAR_COLUMNS:
+            assert out[col].notna().all()
+
+    def test_raises_on_non_datetime_index(self) -> None:
+        df = pd.DataFrame({"Close": [1, 2, 3]})
+        with pytest.raises(TypeError, match="DatetimeIndex"):
+            add_calendar_features(df)
+
+
+class TestRegimeTags:
+    def test_adds_all_expected_columns(self, ohlcv_frame: pd.DataFrame) -> None:
+        out = add_regime_tags(ohlcv_frame)
+        for col in REGIME_COLUMNS:
+            assert col in out.columns
+
+    def test_realized_vol_20d_is_positive_after_warmup(self, ohlcv_frame: pd.DataFrame) -> None:
+        out = add_regime_tags(ohlcv_frame)
+        tail = out["realized_vol_20d"].iloc[-10:]
+        assert (tail > 0).all()
+
+    def test_trend_values_in_minus1_zero_one(self, ohlcv_frame: pd.DataFrame) -> None:
+        out = add_regime_tags(ohlcv_frame)
+        for col in ["trend_5d", "trend_20d", "trend_60d"]:
+            unique = set(out[col].dropna().unique().tolist())
+            assert unique <= {-1, 0, 1}, f"{col} has unexpected values: {unique}"
+
+
+class TestPipeline:
+    @pytest.fixture
+    def long_ohlcv(self) -> pd.DataFrame:
+        rng = np.random.default_rng(seed=123)
+        n = 200
+        idx = pd.date_range("2024-01-02", periods=n, freq="B")
+        close = 100 + np.cumsum(rng.normal(0, 1, n))
+        return pd.DataFrame(
+            {
+                "Open": close + rng.normal(0, 0.2, n),
+                "High": close + np.abs(rng.normal(0, 0.5, n)),
+                "Low": close - np.abs(rng.normal(0, 0.5, n)),
+                "Close": close,
+                "Volume": rng.integers(500_000, 2_000_000, n),
+            },
+            index=idx,
+        )
+
+    def test_engineer_features_produces_canonical_columns(self, long_ohlcv: pd.DataFrame) -> None:
+        out = engineer_features(long_ohlcv)
+        # In canonical order, no extras, no missing
+        canonical = feature_columns()
+        assert list(out.columns) == canonical
+
+    def test_engineer_features_count_is_38(self, long_ohlcv: pd.DataFrame) -> None:
+        out = engineer_features(long_ohlcv)
+        assert len(out.columns) == 38
+
+    def test_engineer_features_deterministic(self, long_ohlcv: pd.DataFrame) -> None:
+        a = engineer_features(long_ohlcv)
+        b = engineer_features(long_ohlcv)
+        pd.testing.assert_frame_equal(a, b)
+
+    def test_engineer_features_does_not_mutate_input(self, long_ohlcv: pd.DataFrame) -> None:
+        before = long_ohlcv.copy()
+        _ = engineer_features(long_ohlcv)
+        pd.testing.assert_frame_equal(long_ohlcv, before)
+
+    def test_engineer_features_tail_has_no_nans(self, long_ohlcv: pd.DataFrame) -> None:
+        """After warmup (~60 bars), every row must be NaN-free per the contract."""
+        out = engineer_features(long_ohlcv)
+        assert out.iloc[-50:].notna().all().all()
+
+    def test_engineer_features_head_has_warmup_nans(self, long_ohlcv: pd.DataFrame) -> None:
+        out = engineer_features(long_ohlcv)
+        # The first row of trend_60d must be a warmup NaN/0 (sign(NaN)->0 by our impl)
+        # but rsi_14 and bollinger bands must have NaNs at the head.
+        assert out["rsi_14"].iloc[:13].isna().any()
+
+    def test_feature_columns_writes_when_uninitialized(self, tmp_path: Path, monkeypatch) -> None:
+        target = tmp_path / "feature_names.json"
+        monkeypatch.setattr(pipeline_mod, "_FEATURE_NAMES_PATH", target)
+        cols = feature_columns()
+        assert target.exists()
+        import json
+
+        assert json.loads(target.read_text()) == cols
+
+    def test_feature_columns_overwrites_empty_dict_placeholder(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        target = tmp_path / "feature_names.json"
+        target.write_text("{}")
+        monkeypatch.setattr(pipeline_mod, "_FEATURE_NAMES_PATH", target)
+        cols = feature_columns()
+        import json
+
+        assert json.loads(target.read_text()) == cols
+
+    def test_feature_columns_raises_on_schema_drift(self, tmp_path: Path, monkeypatch) -> None:
+        target = tmp_path / "feature_names.json"
+        target.write_text('["wrong", "columns", "here"]')
+        monkeypatch.setattr(pipeline_mod, "_FEATURE_NAMES_PATH", target)
+        with pytest.raises(FeatureSchemaMismatchError, match="schema drift"):
+            feature_columns()
+
+    def test_feature_columns_passes_when_persisted_matches(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        target = tmp_path / "feature_names.json"
+        monkeypatch.setattr(pipeline_mod, "_FEATURE_NAMES_PATH", target)
+        first = feature_columns()
+        second = feature_columns()
+        assert first == second
