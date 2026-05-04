@@ -80,6 +80,7 @@ def _write_persisted(columns: list[str]) -> None:
     _FEATURE_NAMES_PATH.parent.mkdir(parents=True, exist_ok=True)
     with _FEATURE_NAMES_PATH.open("w", encoding="utf-8") as f:
         json.dump(columns, f, indent=2)
+        f.write("\n")
 
 
 def feature_columns() -> list[str]:
