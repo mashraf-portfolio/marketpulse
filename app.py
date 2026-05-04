@@ -1,4 +1,5 @@
 """HF Spaces entry point. Reads env vars and launches the Gradio app."""
+
 from __future__ import annotations
 
 import os

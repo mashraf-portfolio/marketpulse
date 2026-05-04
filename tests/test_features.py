@@ -94,9 +94,9 @@ class TestLaggedFeatures:
     def test_lag_k_has_k_leading_nans(self, ohlcv_frame: pd.DataFrame) -> None:
         out = add_lagged_features(ohlcv_frame)
         for k in range(1, 6):
-            assert (
-                out[f"ret_lag_{k}"].iloc[:k].isna().all()
-            ), f"ret_lag_{k} should have {k} leading NaNs"
+            assert out[f"ret_lag_{k}"].iloc[:k].isna().all(), (
+                f"ret_lag_{k} should have {k} leading NaNs"
+            )
 
     def test_ret_lag_1_matches_pct_change_shift(self, ohlcv_frame: pd.DataFrame) -> None:
         out = add_lagged_features(ohlcv_frame)
