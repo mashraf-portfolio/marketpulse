@@ -21,6 +21,16 @@ from src.features.pipeline import (
     feature_columns,
 )
 from src.features.regime_tags import REGIME_COLUMNS, add_regime_tags
+from src.features.targets import (
+    REGIME_LABELS,
+    TARGET_COLUMNS,
+    generate_targets,
+    y_dir,
+    y_high_vol,
+    y_logvol,
+    y_price,
+    y_regime,
+)
 from src.features.technical import TECHNICAL_COLUMNS, add_technical_indicators
 
 
@@ -228,3 +238,124 @@ class TestPipeline:
         first = feature_columns()
         second = feature_columns()
         assert first == second
+
+
+class TestTargetGenerators:
+    @pytest.fixture
+    def features_frame(self) -> pd.DataFrame:
+        rng = np.random.default_rng(seed=11)
+        n = 200
+        idx = pd.date_range("2024-01-02", periods=n, freq="B")
+        close = 100 + np.cumsum(rng.normal(0, 1, n))
+        raw = pd.DataFrame(
+            {
+                "Open": close + rng.normal(0, 0.2, n),
+                "High": close + np.abs(rng.normal(0, 0.5, n)),
+                "Low": close - np.abs(rng.normal(0, 0.5, n)),
+                "Close": close,
+                "Volume": rng.integers(500_000, 2_000_000, n),
+            },
+            index=idx,
+        )
+        return engineer_features(raw)
+
+    # --- y_price ---
+
+    def test_y_price_1d_last_row_is_nan(self, features_frame: pd.DataFrame) -> None:
+        out = y_price(features_frame["Close"], 1)
+        assert pd.isna(out.iloc[-1])
+
+    def test_y_price_7d_last_seven_rows_nan(self, features_frame: pd.DataFrame) -> None:
+        out = y_price(features_frame["Close"], 7)
+        assert out.iloc[-7:].isna().all()
+
+    def test_y_price_matches_log_diff_definition(self, features_frame: pd.DataFrame) -> None:
+        close = features_frame["Close"]
+        out = y_price(close, 1)
+        expected = np.log(close.shift(-1)) - np.log(close)
+        pd.testing.assert_series_equal(out, expected, check_names=False)
+
+    # --- y_dir ---
+
+    def test_y_dir_values_in_zero_one_or_nan(self, features_frame: pd.DataFrame) -> None:
+        out = y_dir(features_frame["Close"], 1)
+        unique = set(out.dropna().unique().tolist())
+        assert unique <= {0.0, 1.0}
+
+    def test_y_dir_matches_sign_of_y_price(self, features_frame: pd.DataFrame) -> None:
+        close = features_frame["Close"]
+        price = y_price(close, 1)
+        direction = y_dir(close, 1)
+        # On rows where price is non-zero and finite, direction should match
+        mask = price.notna() & (price != 0)
+        assert ((direction[mask] == 1) == (price[mask] > 0)).all()
+
+    # --- y_logvol ---
+
+    def test_y_logvol_last_window_rows_are_nan(self, features_frame: pd.DataFrame) -> None:
+        out = y_logvol(features_frame["Close"], window=5)
+        assert out.iloc[-5:].isna().all()
+
+    def test_y_logvol_is_finite_in_middle(self, features_frame: pd.DataFrame) -> None:
+        out = y_logvol(features_frame["Close"], window=5)
+        # Skip warmup head and forward-window tail; middle should be finite
+        middle = out.iloc[20:-10]
+        assert np.isfinite(middle).all()
+
+    # --- y_high_vol ---
+
+    def test_y_high_vol_binary_or_nan(self, features_frame: pd.DataFrame) -> None:
+        out = y_high_vol(features_frame["realized_vol_20d"])
+        unique = set(out.dropna().unique().tolist())
+        assert unique <= {0.0, 1.0}
+
+    # --- y_regime ---
+
+    def test_y_regime_uses_only_known_labels(self, features_frame: pd.DataFrame) -> None:
+        out = y_regime(features_frame["trend_60d"], features_frame["vol_bucket"])
+        unique = set(out.dropna().unique().tolist())
+        assert unique <= set(REGIME_LABELS)
+
+    def test_y_regime_high_vol_forced_to_sideways(self, features_frame: pd.DataFrame) -> None:
+        """When vol_bucket == 3, label must be 'sideways' regardless of trend."""
+        out = y_regime(features_frame["trend_60d"], features_frame["vol_bucket"])
+        high_vol_mask = features_frame["vol_bucket"] == 3
+        if high_vol_mask.any():
+            assert (out[high_vol_mask].dropna() == "sideways").all()
+
+    def test_y_regime_rejects_float_vol_bucket(self, features_frame: pd.DataFrame) -> None:
+        bad_bucket = features_frame["vol_bucket"].astype("float64")
+        with pytest.raises(TypeError, match="integer or categorical"):
+            y_regime(features_frame["trend_60d"], bad_bucket)
+
+    # --- generate_targets composer ---
+
+    def test_generate_targets_returns_all_columns(self, features_frame: pd.DataFrame) -> None:
+        out = generate_targets(features_frame)
+        assert list(out.columns) == TARGET_COLUMNS
+
+    def test_generate_targets_index_matches_input(self, features_frame: pd.DataFrame) -> None:
+        out = generate_targets(features_frame)
+        assert out.index.equals(features_frame.index)
+
+    def test_generate_targets_raises_on_raw_ohlcv(self) -> None:
+        idx = pd.date_range("2024-01-02", periods=10, freq="B")
+        raw = pd.DataFrame(
+            {
+                "Open": [1] * 10,
+                "High": [1] * 10,
+                "Low": [1] * 10,
+                "Close": [1] * 10,
+                "Volume": [1] * 10,
+            },
+            index=idx,
+        )
+        with pytest.raises(ValueError, match="features-engineered"):
+            generate_targets(raw)
+
+    def test_generate_targets_no_leakage_into_features(self, features_frame: pd.DataFrame) -> None:
+        """Targets must not appear as columns in the engineered feature frame."""
+        targets = generate_targets(features_frame)
+        feat_cols = set(features_frame.columns)
+        for tcol in targets.columns:
+            assert tcol not in feat_cols, f"target {tcol} leaked into feature matrix"
