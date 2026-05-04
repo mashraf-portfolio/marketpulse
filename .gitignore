@@ -29,6 +29,10 @@ Thumbs.db
 
 # Project-specific
 hf_space/
+# data/cache/ — joblib OHLCV cache for the 23-ticker whitelist.
+# The pickled cache (data/cache/joblib/**) is INTENTIONALLY COMMITTED so
+# deployed services (Railway API, HF Space) work offline w/o yfinance.
+# Only ad-hoc parquet/csv exports are excluded:
 data/cache/*.parquet
 data/cache/*.csv
 !data/cache/.keep_whitelist
