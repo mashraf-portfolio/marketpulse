@@ -44,3 +44,6 @@ models/checkpoints/
 
 # Claude Code local workspace
 .claude/
+
+# Conversation handoff working notes (local only, never tracked)
+docs/handoff_*.md
