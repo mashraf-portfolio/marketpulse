@@ -14,6 +14,7 @@ Each model is verified against the same contract:
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import numpy as np
@@ -21,6 +22,7 @@ import pandas as pd
 import pytest
 
 from src.models.head1_price.arima_model import ARIMAModel
+from src.models.head1_price.prophet_model import ProphetModel
 
 
 @pytest.fixture
@@ -38,6 +40,12 @@ def synthetic_returns() -> tuple[pd.DataFrame, pd.Series]:
 def horizon_features() -> pd.DataFrame:
     """20-step inference frame (ARIMA only uses len(features), not contents)."""
     return pd.DataFrame(index=range(20))
+
+
+@pytest.fixture
+def horizon_features_dated() -> pd.DataFrame:
+    """20-step inference frame with a real DatetimeIndex (required by Prophet)."""
+    return pd.DataFrame(index=pd.date_range("2024-10-15", periods=20, freq="B"))
 
 
 class TestARIMA:
@@ -82,3 +90,63 @@ class TestARIMA:
         features = pd.DataFrame(index=idx)
         with pytest.raises(ValueError, match="NaN"):
             ARIMAModel().fit(features, y)
+
+
+@pytest.fixture(autouse=True)
+def _silence_cmdstanpy(caplog):
+    """cmdstanpy emits INFO logs on every Prophet fit; silence at WARNING."""
+    logging.getLogger("cmdstanpy").setLevel(logging.WARNING)
+    yield
+
+
+class TestProphet:
+    def test_fit_returns_self(self, synthetic_returns) -> None:
+        features, y = synthetic_returns
+        m = ProphetModel()
+        out = m.fit(features, y)
+        assert out is m
+
+    def test_predict_shape(self, synthetic_returns, horizon_features_dated) -> None:
+        features, y = synthetic_returns
+        m = ProphetModel().fit(features, y)
+        preds = m.predict(horizon_features_dated)
+        assert preds.shape == (20,)
+        assert np.isfinite(preds).all()
+
+    def test_predict_interval_ordered(self, synthetic_returns, horizon_features_dated) -> None:
+        features, y = synthetic_returns
+        m = ProphetModel().fit(features, y)
+        lo, pt, hi = m.predict_interval(horizon_features_dated, alpha=0.05)
+        assert lo.shape == pt.shape == hi.shape == (20,)
+        assert (lo <= pt).all()
+        assert (pt <= hi).all()
+
+    def test_save_load_roundtrip(
+        self, synthetic_returns, horizon_features_dated, tmp_path: Path
+    ) -> None:
+        features, y = synthetic_returns
+        m1 = ProphetModel().fit(features, y)
+        preds_before = m1.predict(horizon_features_dated)
+        m1.save(tmp_path)
+        m2 = ProphetModel.load(tmp_path)
+        preds_after = m2.predict(horizon_features_dated)
+        np.testing.assert_allclose(preds_before, preds_after, rtol=1e-6)
+
+    def test_unfit_predict_raises(self, horizon_features_dated) -> None:
+        m = ProphetModel()
+        with pytest.raises(RuntimeError, match="before fit"):
+            m.predict(horizon_features_dated)
+
+    def test_predict_requires_datetime_index(self, synthetic_returns) -> None:
+        features, y = synthetic_returns
+        m = ProphetModel().fit(features, y)
+        bad_features = pd.DataFrame(index=range(20))
+        with pytest.raises(TypeError, match="DatetimeIndex"):
+            m.predict(bad_features)
+
+    def test_fit_requires_datetime_index_on_y(self) -> None:
+        idx = range(50)  # not a DatetimeIndex
+        y = pd.Series([0.01] * 50, index=idx)
+        features = pd.DataFrame(index=idx)
+        with pytest.raises(TypeError, match="DatetimeIndex"):
+            ProphetModel().fit(features, y)
