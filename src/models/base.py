@@ -28,20 +28,20 @@ class ForecastModel(ABC):
     name: str = "base"
 
     @abstractmethod
-    def fit(self, X: pd.DataFrame, y: pd.Series) -> ForecastModel:
+    def fit(self, features: pd.DataFrame, y: pd.Series) -> ForecastModel:
         """Fit the model. Returns self for chaining.
 
-        X is the engineered feature frame (NaN-free, post-warmup).
-        y is the aligned target (e.g. y_price_1d), same index as X.
+        features is the engineered feature frame (NaN-free, post-warmup).
+        y is the aligned target (e.g. y_price_1d), same index as features.
         """
 
     @abstractmethod
-    def predict(self, X: pd.DataFrame) -> np.ndarray:
-        """Point predictions, one per row of X. Shape (len(X),)."""
+    def predict(self, features: pd.DataFrame) -> np.ndarray:
+        """Point predictions, one per row of features. Shape (len(features),)."""
 
     @abstractmethod
     def predict_interval(
-        self, X: pd.DataFrame, alpha: float = 0.05
+        self, features: pd.DataFrame, alpha: float = 0.05
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Return (lower, point, upper) prediction intervals.
 
