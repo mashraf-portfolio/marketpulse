@@ -22,6 +22,7 @@ import pandas as pd
 import pytest
 
 from src.models.head1_price.arima_model import ARIMAModel
+from src.models.head1_price.lstm_model import LSTMModel
 from src.models.head1_price.prophet_model import ProphetModel
 
 
@@ -150,3 +151,80 @@ class TestProphet:
         features = pd.DataFrame(index=idx)
         with pytest.raises(TypeError, match="DatetimeIndex"):
             ProphetModel().fit(features, y)
+
+
+class TestLSTM:
+    def test_fit_returns_self(self, synthetic_returns) -> None:
+        features, y = synthetic_returns
+        m = LSTMModel(epochs=1, mc_samples=3, seed=42)
+        out = m.fit(features, y)
+        assert out is m
+
+    def test_predict_shape(self, synthetic_returns, horizon_features_dated) -> None:
+        features, y = synthetic_returns
+        # LSTM needs feature columns at predict time matching fit-time columns.
+        rng = np.random.default_rng(seed=42)
+        horizon = pd.DataFrame(
+            rng.normal(0, 1, (20, len(features.columns))),
+            columns=features.columns,
+            index=horizon_features_dated.index,
+        )
+        m = LSTMModel(epochs=1, mc_samples=3, seed=42).fit(features, y)
+        preds = m.predict(horizon)
+        assert preds.shape == (20,)
+        assert np.isfinite(preds).all()
+
+    def test_predict_interval_ordered(self, synthetic_returns, horizon_features_dated) -> None:
+        features, y = synthetic_returns
+        rng = np.random.default_rng(seed=42)
+        horizon = pd.DataFrame(
+            rng.normal(0, 1, (20, len(features.columns))),
+            columns=features.columns,
+            index=horizon_features_dated.index,
+        )
+        m = LSTMModel(epochs=1, mc_samples=5, seed=42).fit(features, y)
+        lo, pt, hi = m.predict_interval(horizon, alpha=0.05)
+        assert lo.shape == pt.shape == hi.shape == (20,)
+        assert (lo <= pt).all()
+        assert (pt <= hi).all()
+        assert (hi - lo).mean() > 0, "MC-dropout should produce nonzero-width intervals"
+
+    def test_save_load_roundtrip(
+        self, synthetic_returns, horizon_features_dated, tmp_path: Path
+    ) -> None:
+        features, y = synthetic_returns
+        rng = np.random.default_rng(seed=42)
+        horizon = pd.DataFrame(
+            rng.normal(0, 1, (20, len(features.columns))),
+            columns=features.columns,
+            index=horizon_features_dated.index,
+        )
+        m1 = LSTMModel(epochs=1, mc_samples=3, seed=42).fit(features, y)
+        preds_before = m1.predict(horizon)
+        m1.save(tmp_path)
+        m2 = LSTMModel.load(tmp_path)
+        preds_after = m2.predict(horizon)
+        # Deterministic predict (training=False) -> exact match.
+        np.testing.assert_allclose(preds_before, preds_after, rtol=1e-5, atol=1e-7)
+
+    def test_unfit_predict_raises(self, synthetic_returns) -> None:
+        features, _y = synthetic_returns
+        m = LSTMModel(epochs=1, mc_samples=3, seed=42)
+        horizon = features.iloc[:20]
+        with pytest.raises(RuntimeError, match="before fit"):
+            m.predict(horizon)
+
+    def test_nan_in_y_raises(self, synthetic_returns) -> None:
+        features, y = synthetic_returns
+        y_bad = y.copy()
+        y_bad.iloc[10] = np.nan
+        with pytest.raises(ValueError, match="NaN"):
+            LSTMModel(epochs=1, mc_samples=3, seed=42).fit(features, y_bad)
+
+    def test_too_few_rows_raises(self) -> None:
+        # LSTM needs >=60 rows for windowing.
+        idx = pd.date_range("2024-01-01", periods=30, freq="B")
+        features = pd.DataFrame(np.zeros((30, 3)), columns=list("abc"), index=idx)
+        y = pd.Series(np.zeros(30), index=idx)
+        with pytest.raises(ValueError, match="at least"):
+            LSTMModel(epochs=1, mc_samples=3, seed=42).fit(features, y)
