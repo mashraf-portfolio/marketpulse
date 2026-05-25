@@ -37,7 +37,7 @@ dependencies = [
 tft = [
   "torch==2.2.2",
   "pytorch-lightning==2.2.4",
-  "pytorch-forecasting==1.0.0",
+  "pytorch-forecasting==1.4.0",
 ]
 dev = [
   "ruff==0.9.3",
@@ -68,5 +68,5 @@ ignore = ["E501", "N803"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = "test_*.py"
-addopts = "-v --strict-markers"
+addopts = "-v --strict-markers -m 'not slow'"
 markers = ["slow: marks tests as slow — run with -m slow (skipped by default)"]
