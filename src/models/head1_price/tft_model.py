@@ -21,19 +21,20 @@ from pathlib import Path
 import torch  # isort: skip  # noqa: E402 — Windows DLL fix; see module docstring.
 
 import joblib
+import lightning.pytorch as pl
 import numpy as np
 import pandas as pd
-import pytorch_lightning as pl
 import yaml
+from lightning.pytorch.callbacks import EarlyStopping
 from pytorch_forecasting import TemporalFusionTransformer, TimeSeriesDataSet
 from pytorch_forecasting.data.encoders import GroupNormalizer
 from pytorch_forecasting.metrics import QuantileLoss
-from pytorch_lightning.callbacks import EarlyStopping
 
 from src.models.base import ForecastModel
 
 _logger = logging.getLogger(__name__)
 logging.getLogger("pytorch_lightning").setLevel(logging.WARNING)
+logging.getLogger("lightning.pytorch").setLevel(logging.WARNING)
 logging.getLogger("lightning_fabric").setLevel(logging.WARNING)
 logging.getLogger("pytorch_forecasting").setLevel(logging.WARNING)
 
