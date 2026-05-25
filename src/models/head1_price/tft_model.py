@@ -248,6 +248,97 @@ class TFTModel(ForecastModel):
         arr = self._run_inference(features)
         return arr[:, 0], arr[:, 1], arr[:, 2]  # q05, q50, q95
 
+    def attention_weights(self, features: pd.DataFrame) -> dict[str, np.ndarray | dict]:
+        """Extract interpretability artifacts from the fitted TFT.
+
+        Runs a single forward pass (encoder tail + decoder features) and
+        calls interpret_output() to extract attention and variable
+        importance scores. Returns a dict ready for downstream plotting
+        in the Gradio UI.
+
+        Adaptation note: pytorch-forecasting 1.4.0's interpret_output()
+        does NOT return separate encoder_attention / decoder_attention
+        tensors as described in the Phase 3 design notes. It returns a
+        single combined "attention" vector of shape (max_encoder_length,)
+        — this is the encoder attention for prediction horizon 0, averaged
+        over attention heads (with reduction="mean"). The decoder
+        self-attention is embedded in the combined output but cannot be
+        cleanly separated post-hoc; plot_interpretation() uses it as-is.
+
+        Returns:
+            dict with keys:
+              "attention" : np.ndarray, shape (max_encoder_length,).
+                  Normalized encoder attention for the first forecast step
+                  (horizon 0), averaged over heads. Index 0 = oldest
+                  encoder timestep; index -1 = most recent.
+              "static_variables" : dict {name: float}.
+                  Static variable importance scores; sums to ~1 across
+                  variables. For our config: {"group_id": <score>}.
+              "encoder_variables" : dict {name: float}.
+                  Time-varying unknown variable importances (mean over
+                  encoder timesteps).
+              "decoder_variables" : dict {name: float}.
+                  Time-varying known variable importances (mean over
+                  decoder timesteps).
+              "encoder_length_histogram" : np.ndarray.
+                  Count of encoder sequence lengths seen in the batch.
+              "decoder_length_histogram" : np.ndarray.
+                  Count of decoder sequence lengths seen in the batch.
+
+        Raises:
+            RuntimeError: if fit() has not been called.
+        """
+        self._ensure_fitted()
+        assert self._tail_window is not None and self._tail_y is not None
+
+        cfg = self._cfg
+        max_enc = cfg["max_encoder_length"]
+
+        tail_df = self._prepare_df(self._tail_window, self._tail_y, time_offset=0)
+        pred_df = self._prepare_df(features, None, time_offset=max_enc)
+        combined = pd.concat([tail_df, pred_df], ignore_index=True)
+        combined["time_idx"] = np.arange(len(combined), dtype=np.int64)
+
+        inf_dataset = TimeSeriesDataSet.from_dataset(
+            self._training_dataset,
+            combined,
+            predict=True,
+            stop_randomization=True,
+        )
+        inf_loader = inf_dataset.to_dataloader(train=False, batch_size=1, num_workers=0)
+
+        assert self._tft is not None
+        self._tft.eval()
+        with torch.no_grad():
+            x, _ = next(iter(inf_loader))
+            raw_out = self._tft(x)
+
+        # reduction="mean": averages attention over heads+batch, sums variable
+        # importances over batch (batch_size=1, so effectively a squeeze).
+        interpretation = self._tft.interpret_output(raw_out, reduction="mean")
+
+        def _to_np(t: torch.Tensor) -> np.ndarray:
+            return t.detach().cpu().numpy()
+
+        static_names = self._tft.static_variables
+        encoder_names = self._tft.encoder_variables
+        decoder_names = self._tft.decoder_variables
+
+        return {
+            "attention": _to_np(interpretation["attention"]),
+            "static_variables": dict(
+                zip(static_names, _to_np(interpretation["static_variables"]), strict=True)
+            ),
+            "encoder_variables": dict(
+                zip(encoder_names, _to_np(interpretation["encoder_variables"]), strict=True)
+            ),
+            "decoder_variables": dict(
+                zip(decoder_names, _to_np(interpretation["decoder_variables"]), strict=True)
+            ),
+            "encoder_length_histogram": _to_np(interpretation["encoder_length_histogram"]),
+            "decoder_length_histogram": _to_np(interpretation["decoder_length_histogram"]),
+        }
+
     def save(self, path: Path) -> None:
         self._ensure_fitted()
         path.mkdir(parents=True, exist_ok=True)
