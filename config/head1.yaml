@@ -30,51 +30,105 @@ lstm:
   mc_dropout_samples: 50      # number of stochastic forward passes for CI band
   ci_alpha: 0.10              # 90% CI: percentiles [5, 95]
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Head 1b: Temporal Fusion Transformer (TFT)
+#
+# Covariate categorization locked in Conv 5 after:
+#   - leakage audit of trend_*, vol_bucket, realized_vol_20d (vol_bucket
+#     fixed in commit 2acd2ae)
+#   - decision to drop ALL raw OHLC including Close — returns-only
+#     industry practice
+#   - decision to drop raw current-bar Volume — strict no-current-bar
+#     policy for inference safety; only lagged volume features
+#   - decision to treat calendar features as categoricals (not reals)
+#     so TFT's variable selection + embedding layer is used correctly
+# ─────────────────────────────────────────────────────────────────────────────
 tft:
-  encoder_length: 60
-  prediction_length: 1        # 1d horizon (set to 7 for 7d models)
-  hidden_size: 32
+  # ── Architecture (per design doc § Phase 3) ────────────────────────────────
+  max_encoder_length: 60       # 60 trading days of history per training window
+  max_prediction_length: 21    # 21 trading days forecast horizon (matches
+                               # the walk-forward test_window in Phase 2)
+  hidden_size: 16              # small CPU-friendly. ~3-5 min/fold on this box.
   attention_head_size: 4
-  dropout: 0.1
-  hidden_continuous_size: 16
-  max_epochs: 20
-  early_stopping_patience: 4
-  batch_size: 64
-  learning_rate: 0.001
-  quantiles: [0.05, 0.5, 0.95]
+  dropout: 0.2
+  hidden_continuous_size: 8
+  output_size: 3               # quantiles q05, q50, q95 (see loss_quantiles)
+  loss_quantiles: [0.05, 0.5, 0.95]
+  learning_rate: 0.03
+  reduce_on_plateau_patience: 4
 
-# TFT covariate categorization. Critical: getting these wrong wastes the architecture.
-tft_covariates:
+  # ── Training (per design doc § Phase 3) ────────────────────────────────────
+  max_epochs: 50
+  batch_size: 64
+  gradient_clip_val: 0.1
+  early_stopping_patience: 5
+  random_seed: 42
+
+  # ── Target ─────────────────────────────────────────────────────────────────
+  # The TFT target is next-day log return (target_log_ret_1d in the features
+  # frame, NOT stored — engineer_features produces this if requested by the
+  # caller, or it's computed inside the TFT model wrapper as Close.shift(-1)
+  # log return).
+  target: target_log_ret_1d
+
+  # ── Covariate categorization ───────────────────────────────────────────────
+  #
+  # CRITICAL: covariate buckets determine what the model "knows" at each
+  # timestep. Misclassification either wastes architectural capacity (e.g.
+  # treating a categorical as a real) or LEAKS THE FUTURE (e.g. treating a
+  # backward-looking feature as time_varying_known when it's only computable
+  # from past prices).
+
+  # group_id: the static identifier per series. Constant "AAPL" for single
+  # ticker. Becomes real ticker symbol when Phase 5 extends to multi-ticker.
+  # TimeSeriesDataSet requires at least one group identifier.
+  group_ids:
+    - group_id
   static_categoricals:
-    - ticker_group
-  static_reals: []
-  time_varying_known_reals:
-    - dow
-    - dom
-    - month
-    - quarter
-    - days_to_month_end
+    - group_id
+
+  # Calendar features: known for every future date, no market data needed.
+  # Treated as CATEGORICALS (not reals) so TFT uses embedding layers — the
+  # whole reason to pick TFT over LSTM for calendar effects.
   time_varying_known_categoricals:
-    - is_month_end
-    - is_quarter_end
+    - dow            # day of week (0–4)
+    - dom            # day of month (1–31)
+    - month          # month (1–12)
+    - quarter        # quarter (1–4)
+    - is_month_end   # boolean as int
+
+  # Regime tags: signed trend over 5/20/60-day windows. Integer-valued
+  # ({-1, 0, 1}). Leakage-audited safe in Conv 5 commit 2acd2ae.
+  # vol_bucket: rolling quartile rank of realized vol (post-fix backward
+  # looking, 252-day rolling window). Integer-valued (0–3).
+  time_varying_unknown_categoricals:
+    - trend_5d
+    - trend_20d
+    - trend_60d
+    - vol_bucket
+
+  # All continuous, market-derived features. Computed from past-only data.
+  # 24 features after dropping raw OHLC (D3) and raw Volume (no-current-bar).
+  # Counts: 7 momentum + 5 bands/vol + 1 realized_vol + 8 lagged returns + 3 lagged volume.
+  # Plus group_id (static) + 5 calendar (known cat) + 4 regime (unknown cat) = 34 total.
   time_varying_unknown_reals:
-    - Open
-    - High
-    - Low
-    - Close
-    - Volume
+    # Momentum (7)
     - rsi_14
     - macd
     - macd_signal
     - macd_diff
-    - bb_high
-    - bb_low
-    - bb_mid
-    - atr_14
-    - obv
     - stoch_k
     - stoch_d
     - mfi_14
+    # Bands / volatility (5)
+    - bb_high
+    - bb_mid
+    - bb_low
+    - atr_14
+    - obv
+    # Realized vol (1)
+    - realized_vol_20d
+    # Lagged returns (8)
     - ret_lag_1
     - ret_lag_2
     - ret_lag_3
@@ -83,10 +137,24 @@ tft_covariates:
     - log_ret_lag_1
     - log_ret_lag_2
     - log_ret_lag_3
+    # Lagged volume (3)
     - vol_lag_1
     - vol_lag_2
     - vol_lag_3
-    - trend_5d
-    - trend_20d
-    - trend_60d
-    - vol_bucket
+
+  # Target column is also in unknown_reals (TFT needs the target series in
+  # the dataset; pytorch-forecasting handles this when target= is set).
+
+  # ── Excluded from TFT input (intentionally) ───────────────────────────────
+  #
+  # The following columns ARE in the features dataframe produced by
+  # engineer_features() but are deliberately NOT passed to TFT:
+  #
+  #   Open, High, Low, Close   — D3 decision: returns-only, drop OHLC
+  #   Volume                   — no-current-bar policy: only lagged volumes
+  #
+  # If at runtime the model receives a frame with these columns present,
+  # the TFTModel wrapper must drop them BEFORE building the TimeSeriesDataSet.
+
+  # ── Persistence ────────────────────────────────────────────────────────────
+  save_format: pytorch_forecasting  # native .ckpt + metadata.json sidecar
