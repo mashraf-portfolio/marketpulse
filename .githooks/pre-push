@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+#
+# Pre-push hook: run the slow test suite before allowing push.
+# Bypass with: git push --no-verify
+#
+# Why this exists: tests marked @pytest.mark.slow are excluded from
+# the default `pytest tests/` run (see pyproject.toml addopts).
+# Without this hook, slow tests would silently rot — they only run
+# when explicitly requested with `pytest -m slow`. This hook makes
+# "explicit" automatic at the push boundary.
+
+set -e
+
+echo "[pre-push] Running slow test suite (use --no-verify to skip)..."
+echo "[pre-push] This is expected to take ~30s."
+
+# Activate venv if not already active. POSIX-portable path.
+if [ -z "$VIRTUAL_ENV" ]; then
+    if [ -f ".venv/Scripts/python.exe" ]; then
+        # Windows venv layout
+        PYTHON=".venv/Scripts/python.exe"
+    elif [ -f ".venv/bin/python" ]; then
+        # Unix venv layout
+        PYTHON=".venv/bin/python"
+    else
+        echo "[pre-push] ERROR: no .venv found at .venv/Scripts/ or .venv/bin/"
+        echo "[pre-push] Run from project root with venv installed."
+        exit 1
+    fi
+else
+    PYTHON="python"
+fi
+
+"$PYTHON" -m pytest tests/ -m slow --tb=short
+
+if [ $? -ne 0 ]; then
+    echo ""
+    echo "[pre-push] Slow tests failed. Push aborted."
+    echo "[pre-push] Fix the failure or bypass with: git push --no-verify"
+    exit 1
+fi
+
+echo "[pre-push] Slow tests passed. Proceeding with push."
+exit 0
