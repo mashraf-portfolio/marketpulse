@@ -42,6 +42,14 @@ models/checkpoints/
 !models/metadata/
 *.log
 
+# PyTorch Lightning / pytorch-forecasting training artifacts
+# — checkpoints/ is the default Lightning ModelCheckpoint dir
+# — lightning_logs/ is the default CSVLogger dir
+# Both are written under cwd when TFT models train (tests, sanity
+# fits, future Phase 5 walk-forward runs). Per-run state, not source.
+checkpoints/
+lightning_logs/
+
 # Claude Code local workspace
 .claude/
 
