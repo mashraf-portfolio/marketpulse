@@ -27,6 +27,7 @@ REGIME_COLUMNS: list[str] = [
 ]
 
 _TRADING_DAYS_PER_YEAR = 252
+_VOL_BUCKET_WINDOW = 252
 
 
 def _signed_trend(log_ret: pd.Series, window: int) -> pd.Series:
@@ -46,9 +47,16 @@ def add_regime_tags(df: pd.DataFrame) -> pd.DataFrame:
 
     out["realized_vol_20d"] = log_ret.rolling(window=20).std() * np.sqrt(_TRADING_DAYS_PER_YEAR)
 
-    # vol_bucket: quartile rank, computed once per series. NaN for warmup rows.
-    out["vol_bucket"] = pd.qcut(
-        out["realized_vol_20d"], q=4, labels=False, duplicates="drop"
-    ).astype("Int8")  # nullable int — preserves NaN in warmup
+    # Replace pd.qcut (which uses global stats — LEAKY across train/test)
+    # with a rolling percentile rank that only uses past data. A 252-day
+    # (~1 trading year) trailing window gives stable thresholds without
+    # peeking into the future. NaN until window is full.
+    _vb = (
+        out["realized_vol_20d"]
+        .rolling(window=_VOL_BUCKET_WINDOW, min_periods=_VOL_BUCKET_WINDOW)
+        .rank(pct=True)
+        .mul(4)
+    )
+    out["vol_bucket"] = np.floor(_vb).clip(0, 3).astype("Int8")
 
     return out

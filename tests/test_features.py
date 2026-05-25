@@ -158,7 +158,7 @@ class TestPipeline:
     @pytest.fixture
     def long_ohlcv(self) -> pd.DataFrame:
         rng = np.random.default_rng(seed=123)
-        n = 200
+        n = 330  # must exceed vol_bucket warmup (271 bars: 20 realized_vol + 252 rolling rank - 1) + tail check (50) + margin
         idx = pd.date_range("2024-01-02", periods=n, freq="B")
         close = 100 + np.cumsum(rng.normal(0, 1, n))
         return pd.DataFrame(
@@ -193,7 +193,7 @@ class TestPipeline:
         pd.testing.assert_frame_equal(long_ohlcv, before)
 
     def test_engineer_features_tail_has_no_nans(self, long_ohlcv: pd.DataFrame) -> None:
-        """After warmup (~60 bars), every row must be NaN-free per the contract."""
+        """After warmup (~271 bars: 20 realized_vol + 252 rolling-rank − 1), every row must be NaN-free."""
         out = engineer_features(long_ohlcv)
         assert out.iloc[-50:].notna().all().all()
 
@@ -359,3 +359,64 @@ class TestTargetGenerators:
         feat_cols = set(features_frame.columns)
         for tcol in targets.columns:
             assert tcol not in feat_cols, f"target {tcol} leaked into feature matrix"
+
+
+class TestFeatureLeakage:
+    """Regression tests: every feature must be computable from past
+    data only. Computing the feature on a truncated input must yield
+    identical values for overlapping rows as computing on the full
+    input. Catches the vol_bucket-style global-stats leakage bug.
+    """
+
+    @pytest.fixture
+    def aapl_df(self):
+        from datetime import date
+
+        from src.data.cache import CachedFetcher
+        from src.data.fetchers import YFinanceFetcher
+
+        fetcher = CachedFetcher(YFinanceFetcher())
+        return fetcher.fetch("AAPL", start=date(2019, 1, 1), end=date(2024, 12, 31))
+
+    @pytest.mark.parametrize(
+        "feature",
+        [
+            "trend_5d",
+            "trend_20d",
+            "trend_60d",
+            "realized_vol_20d",
+            "vol_bucket",
+            "rsi_14",
+            "macd",
+            "atr_14",
+            "obv",
+        ],
+    )
+    def test_feature_uses_only_past_data(self, aapl_df, feature):
+        """For every named feature, computing on df[:N] must match
+        computing on df for all overlapping non-NaN rows."""
+        full = engineer_features(aapl_df).dropna()
+        trunc = engineer_features(aapl_df.iloc[:500].copy()).dropna()
+        overlap = full.index.intersection(trunc.index)
+        assert len(overlap) > 50, f"Test setup: overlap too small ({len(overlap)})"
+        if pd.api.types.is_integer_dtype(full[feature]) or str(full[feature].dtype) in (
+            "Int8",
+            "Int16",
+            "Int32",
+            "Int64",
+        ):
+            matches = (
+                full.loc[overlap, feature].values == trunc.loc[overlap, feature].values
+            ).sum()
+        else:
+            matches = np.isclose(
+                full.loc[overlap, feature].values,
+                trunc.loc[overlap, feature].values,
+                rtol=1e-9,
+                atol=1e-12,
+            ).sum()
+        total = len(overlap)
+        assert matches == total, (
+            f"{feature} has leakage: {total - matches}/{total} rows differ "
+            f"between full-data and truncated-data computation."
+        )
